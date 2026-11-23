@@ -1,0 +1,3099 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Synthesis: Anatomy of a Single Transaction</title>
+  <style>
+    /* ==========================================================================
+       DESIGN TOKENS & EDITORIAL BLUEPRINT THEME
+       ========================================================================== */
+    :root {
+      --navy: #1E2942;
+      --navy-deep: #131B2E;
+      --navy-mid: #2C3A52;
+      --ochre: #D99B4E;
+      --ochre-light: #F3DFBE;
+      --ochre-dark: #B57B30;
+      --crimson: #B8253A;
+      --crimson-light: #FCE8EB;
+      --crimson-glow: rgba(184, 37, 58, 0.35);
+      --slate: #334155;
+      --slate-muted: #64748B;
+      --cream: #F6F3EB;
+      --cream-card: #FCFBF7;
+      --white: #FFFFFF;
+      --grid-minor: rgba(30, 41, 66, 0.055);
+      --grid-major: rgba(30, 41, 66, 0.11);
+      --border-ink: #1E2942;
+      --border-soft: rgba(30, 41, 66, 0.18);
+      --success: #1E6F50;
+      --success-bg: #E6F4EE;
+      --teams-purple: #4B53BC;
+      --teams-bg: #F3F4FC;
+
+      --font-display: "Georgia", "Cambria", "Times New Roman", serif;
+      --font-sans: "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+      --font-mono: "Cascadia Code", "Consolas", "SFMono-Regular", Menlo, Monaco, monospace;
+
+      --shadow-editorial: 4px 4px 0 rgba(30, 41, 66, 0.10);
+      --shadow-card: 0 8px 24px rgba(30, 41, 66, 0.06);
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      color: var(--navy);
+      font-family: var(--font-sans);
+      background-color: var(--cream);
+      background-image:
+        linear-gradient(to right, var(--grid-major) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--grid-major) 1px, transparent 1px),
+        linear-gradient(to right, var(--grid-minor) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--grid-minor) 1px, transparent 1px);
+      background-size: 96px 96px, 96px 96px, 24px 24px, 24px 24px;
+      background-position: -1px -1px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    /* ==========================================================================
+       APP SHELL & HEADER
+       ========================================================================== */
+    .app-shell {
+      max-width: 1260px;
+      margin: 0 auto;
+      padding: 20px 24px 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .masthead {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 16px;
+      padding-bottom: 14px;
+      border-bottom: 2px solid var(--navy);
+      position: relative;
+    }
+
+    .masthead::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -6px;
+      height: 1px;
+      background: var(--border-soft);
+    }
+
+    .masthead-kicker {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--crimson);
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .masthead-kicker .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--crimson);
+      display: inline-block;
+    }
+
+    .masthead h1 {
+      margin: 0;
+      font-family: var(--font-display);
+      font-size: clamp(1.55rem, 2.7vw, 2.2rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--navy);
+      line-height: 1.15;
+    }
+
+    .masthead-subtitle {
+      margin: 5px 0 0;
+      font-size: 0.96rem;
+      color: var(--slate);
+      max-width: 660px;
+    }
+
+    .header-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Buttons */
+    .btn {
+      font-family: var(--font-sans);
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 9px 15px;
+      border-radius: var(--radius-sm);
+      border: 1.5px solid var(--navy);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: transform 0.14s ease, background-color 0.16s ease, box-shadow 0.16s ease, color 0.16s ease;
+      background: var(--white);
+      color: var(--navy);
+      box-shadow: 2px 2px 0 rgba(30, 41, 66, 0.12);
+    }
+
+    .btn:hover:not(:disabled) {
+      transform: translate(-1px, -1px);
+      box-shadow: 3px 3px 0 rgba(30, 41, 66, 0.18);
+    }
+
+    .btn:active:not(:disabled) {
+      transform: translate(1px, 1px);
+      box-shadow: 1px 1px 0 rgba(30, 41, 66, 0.12);
+    }
+
+    .btn:focus-visible {
+      outline: 2px solid var(--crimson);
+      outline-offset: 3px;
+    }
+
+    .btn:disabled {
+      opacity: 0.48;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .btn-primary {
+      background: var(--navy);
+      color: var(--white);
+      border-color: var(--navy);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--navy-deep);
+    }
+
+    .btn-crimson {
+      background: var(--crimson);
+      color: var(--white);
+      border-color: #8C1A2B;
+    }
+
+    .btn-crimson:hover:not(:disabled) {
+      background: #9E1E31;
+    }
+
+    .btn-ochre {
+      background: var(--ochre);
+      color: var(--navy-deep);
+      border-color: var(--navy);
+    }
+
+    .btn-ochre:hover:not(:disabled) {
+      background: #CE8D3B;
+    }
+
+    .btn-autoplay.unlocked {
+      background: var(--ochre);
+      color: var(--navy-deep);
+      border-color: var(--navy);
+      animation: subtlePulse 2.4s ease-in-out infinite;
+    }
+
+    @keyframes subtlePulse {
+      0%, 100% { box-shadow: 2px 2px 0 rgba(30, 41, 66, 0.18), 0 0 0 0 rgba(217, 155, 78, 0.45); }
+      50% { box-shadow: 2px 2px 0 rgba(30, 41, 66, 0.18), 0 0 0 6px rgba(217, 155, 78, 0); }
+    }
+
+    /* ==========================================================================
+       LIVE SYSTEM TELEMETRY BAR
+       ========================================================================== */
+    .telemetry-bar {
+      background: var(--navy);
+      color: var(--white);
+      border: 1.5px solid var(--navy-deep);
+      border-radius: var(--radius-md);
+      padding: 11px 18px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 14px;
+      box-shadow: var(--shadow-editorial);
+      align-items: center;
+    }
+
+    .telemetry-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      border-right: 1px solid rgba(255, 255, 255, 0.14);
+      padding-right: 12px;
+    }
+
+    .telemetry-cell:last-child {
+      border-right: none;
+      padding-right: 0;
+    }
+
+    .telemetry-label {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: #9FB0CC;
+    }
+
+    .telemetry-value {
+      font-size: 0.92rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--white);
+    }
+
+    .telemetry-pill {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+
+    .pill-ok {
+      background: rgba(30, 111, 80, 0.35);
+      color: #8CF0C4;
+      border: 1px solid rgba(140, 240, 196, 0.35);
+    }
+
+    .pill-low {
+      background: var(--crimson);
+      color: #FFF;
+      border: 1px solid #FF8A9A;
+      animation: blinkBadge 1.3s ease-in-out infinite;
+    }
+
+    .pill-ochre {
+      background: rgba(217, 155, 78, 0.22);
+      color: #F8D39E;
+      border: 1px solid rgba(217, 155, 78, 0.55);
+    }
+
+    @keyframes blinkBadge {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.72; }
+    }
+
+    .stock-num {
+      font-family: var(--font-mono);
+      font-size: 1.05rem;
+      transition: transform 0.25s ease, color 0.25s ease;
+    }
+
+    .stock-num.bump {
+      transform: scale(1.22);
+      color: var(--ochre);
+    }
+
+    /* ==========================================================================
+       CENTER ISOMETRIC PIPELINE DIAGRAM
+       ========================================================================== */
+    .pipeline-card {
+      background: var(--cream-card);
+      border: 1.5px solid var(--navy);
+      border-radius: var(--radius-lg);
+      padding: 14px 18px 16px;
+      box-shadow: var(--shadow-editorial);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .pipeline-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+
+    .pipeline-title {
+      font-family: var(--font-mono);
+      font-size: 0.73rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--slate);
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pipeline-legend {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 0.75rem;
+      color: var(--slate);
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .legend-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      border: 1px solid var(--navy);
+    }
+
+    .pipeline-svg-wrap {
+      width: 100%;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    #pipeline-svg {
+      width: 100%;
+      min-width: 820px;
+      height: auto;
+      display: block;
+    }
+
+    /* SVG Pedestal states */
+    .pedestal-group {
+      cursor: pointer;
+    }
+
+    .pedestal-inner {
+      transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .pedestal-group .ped-top {
+      fill: #EFECE3;
+      stroke: var(--navy);
+      stroke-width: 1.6;
+      transition: fill 0.3s ease, stroke 0.3s ease;
+    }
+
+    .pedestal-group .ped-left {
+      fill: #DCE1EC;
+      stroke: var(--navy);
+      stroke-width: 1.6;
+      transition: fill 0.3s ease;
+    }
+
+    .pedestal-group .ped-right {
+      fill: #BFC9DC;
+      stroke: var(--navy);
+      stroke-width: 1.6;
+      transition: fill 0.3s ease;
+    }
+
+    .pedestal-group .ped-ring {
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .pedestal-group.is-active .pedestal-inner {
+      transform: translateY(-7px);
+    }
+
+    .pedestal-group.is-active .ped-top {
+      fill: #FDF3E2;
+      stroke: var(--crimson);
+      stroke-width: 2.2;
+    }
+
+    .pedestal-group.is-active .ped-left {
+      fill: var(--ochre);
+    }
+
+    .pedestal-group.is-active .ped-right {
+      fill: var(--ochre-dark);
+    }
+
+    .pedestal-group.is-active .ped-ring {
+      opacity: 1;
+    }
+
+    .pedestal-group.is-complete .ped-top {
+      fill: #E9EFF9;
+      stroke: var(--navy);
+      stroke-width: 1.8;
+    }
+
+    .pedestal-group.is-complete .ped-left {
+      fill: var(--navy-mid);
+    }
+
+    .pedestal-group.is-complete .ped-right {
+      fill: var(--navy);
+    }
+
+    .pedestal-group .stage-check {
+      opacity: 0;
+      transform: scale(0.5);
+      transform-box: fill-box;
+      transform-origin: center;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+
+    .pedestal-group.is-complete .stage-check {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    /* Animated Crimson Data-Flow Pipeline */
+    .pipe-base {
+      fill: none;
+      stroke: rgba(30, 41, 66, 0.22);
+      stroke-width: 4;
+      stroke-dasharray: 6 6;
+      stroke-linecap: round;
+    }
+
+    .pipe-active {
+      fill: none;
+      stroke: var(--crimson);
+      stroke-width: 4;
+      stroke-linecap: round;
+      stroke-dasharray: 180;
+      stroke-dashoffset: 180;
+      transition: stroke-dashoffset 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .pipe-active.flow-on {
+      stroke-dashoffset: 0;
+    }
+
+    .pipe-flow-dashes {
+      fill: none;
+      stroke: #FFD1D8;
+      stroke-width: 1.8;
+      stroke-dasharray: 5 11;
+      stroke-linecap: round;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .pipe-flow-dashes.flow-on {
+      opacity: 0.9;
+      animation: dashMarch 0.9s linear infinite;
+    }
+
+    @keyframes dashMarch {
+      from { stroke-dashoffset: 32; }
+      to { stroke-dashoffset: 0; }
+    }
+
+    .pulse-packet {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .pulse-packet.firing {
+      opacity: 1;
+    }
+
+    /* ==========================================================================
+       INTERACTIVE WORKSPACE (2-COLUMN EDITORIAL STAGE)
+       ========================================================================== */
+    .workspace {
+      display: grid;
+      grid-template-columns: 350px 1fr;
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .brief-panel, .stage-panel {
+      background: var(--white);
+      border: 1.5px solid var(--navy);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-editorial);
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .brief-panel {
+      background: var(--cream-card);
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .layer-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 5px 10px;
+      border-radius: 4px;
+      border: 1.5px solid var(--navy);
+      width: fit-content;
+    }
+
+    .layer-hardware { background: #FDF3E2; color: var(--navy); border-color: var(--ochre-dark); }
+    .layer-tps { background: #E9EFF9; color: var(--navy); border-color: var(--navy); }
+    .layer-app { background: var(--teams-bg); color: var(--teams-purple); border-color: var(--teams-purple); }
+    .layer-dss { background: #FDF3E2; color: #7C4F12; border-color: var(--ochre-dark); }
+    .layer-ai { background: var(--crimson-light); color: var(--crimson); border-color: var(--crimson); }
+
+    .brief-stage-num {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--crimson);
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-top: 10px;
+    }
+
+    .brief-title {
+      font-family: var(--font-display);
+      font-size: 1.42rem;
+      line-height: 1.22;
+      margin: 4px 0 10px;
+      color: var(--navy);
+    }
+
+    .brief-desc {
+      margin: 0;
+      font-size: 0.93rem;
+      color: var(--slate);
+    }
+
+    .handoff-box {
+      background: var(--white);
+      border: 1px dashed var(--border-ink);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .handoff-row {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .handoff-label {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--slate-muted);
+      font-weight: 700;
+    }
+
+    .handoff-data {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--navy);
+      background: #F4F6FA;
+      padding: 4px 8px;
+      border-radius: 4px;
+      border-left: 3px solid var(--crimson);
+    }
+
+    .stage-progress-dots {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      padding-top: 10px;
+      border-top: 1px solid var(--border-soft);
+    }
+
+    .prog-dot {
+      height: 6px;
+      flex: 1;
+      border-radius: 999px;
+      background: rgba(30, 41, 66, 0.14);
+      transition: background-color 0.3s ease;
+    }
+
+    .prog-dot.done { background: var(--navy); }
+    .prog-dot.active { background: var(--crimson); }
+
+    /* ==========================================================================
+       STAGE VIEWS (DYNAMIC INTERACTIVE SIMULATIONS)
+       ========================================================================== */
+    .stage-view {
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+      height: 100%;
+      animation: fadeSlideIn 0.32s ease;
+    }
+
+    .stage-view.is-visible {
+      display: flex;
+    }
+
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .stage-header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    .stage-instruction {
+      font-size: 0.9rem;
+      color: var(--slate);
+      margin: 0;
+    }
+
+    .stage-instruction strong {
+      color: var(--navy);
+    }
+
+    /* ---------- STAGE 1: POS & NFC CARD ---------- */
+    .pos-arena {
+      position: relative;
+      flex: 1;
+      min-height: 290px;
+      background:
+        radial-gradient(circle at 26% 50%, rgba(217, 155, 78, 0.10), transparent 55%),
+        var(--cream);
+      border: 1.5px solid var(--border-soft);
+      border-radius: var(--radius-md);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: center;
+      justify-items: center;
+      padding: 24px 20px;
+      gap: 20px;
+      overflow: hidden;
+    }
+
+    .pos-terminal {
+      width: 230px;
+      background: var(--navy);
+      border-radius: 14px;
+      padding: 16px;
+      color: var(--white);
+      border: 2px solid var(--navy-deep);
+      box-shadow: 0 12px 24px rgba(19, 27, 46, 0.22);
+      position: relative;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .pos-terminal.drop-hover {
+      box-shadow: 0 0 0 4px var(--ochre), 0 14px 28px rgba(19, 27, 46, 0.28);
+      transform: scale(1.02);
+    }
+
+    .pos-screen {
+      background: #101A2B;
+      border: 1.5px solid #35476B;
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .pos-sku {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: #9FB0CC;
+      letter-spacing: 0.06em;
+    }
+
+    .pos-amount {
+      font-family: var(--font-mono);
+      font-size: 1.55rem;
+      font-weight: 700;
+      color: var(--ochre);
+      margin: 4px 0;
+    }
+
+    .pos-status {
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      color: #CBD5E1;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.06);
+      margin-top: 6px;
+    }
+
+    .pos-status.approved {
+      background: rgba(30, 111, 80, 0.38);
+      color: #8CF0C4;
+    }
+
+    .nfc-zone {
+      margin-top: 14px;
+      border: 1.5px dashed rgba(217, 155, 78, 0.7);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      position: relative;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .nfc-zone-label {
+      font-family: var(--font-mono);
+      font-size: 0.67rem;
+      letter-spacing: 0.09em;
+      color: var(--ochre-light);
+      text-transform: uppercase;
+    }
+
+    .nfc-ripple {
+      position: absolute;
+      inset: 50% auto auto 50%;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 2.5px solid var(--crimson);
+      transform: translate(-50%, -50%) scale(0.4);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .pos-terminal.tapped .nfc-ripple {
+      animation: nfcRipple 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .pos-terminal.tapped .nfc-ripple.r2 {
+      animation-delay: 0.16s;
+      border-color: var(--ochre);
+    }
+
+    @keyframes nfcRipple {
+      0% { opacity: 0.95; transform: translate(-50%, -50%) scale(0.4); }
+      100% { opacity: 0; transform: translate(-50%, -50%) scale(5.5); }
+    }
+
+    /* Draggable Smart Card (following drag guide) */
+    .card-dock {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .nfc-card {
+      width: 226px;
+      height: 140px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #1E2942 0%, #2D3E63 58%, #162036 100%);
+      color: var(--white);
+      padding: 16px;
+      border: 1.5px solid #0F172A;
+      box-shadow: 0 12px 22px rgba(30, 41, 66, 0.25);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      z-index: 10;
+      cursor: grab;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+      transition: box-shadow 0.2s ease, transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .nfc-card:hover {
+      box-shadow: 0 16px 28px rgba(30, 41, 66, 0.32);
+    }
+
+    .nfc-card.dragging {
+      cursor: grabbing;
+      transition: none;
+      box-shadow: 0 22px 34px rgba(184, 37, 58, 0.28);
+      z-index: 40;
+    }
+
+    .nfc-card:focus-visible {
+      outline: 3px solid var(--crimson);
+      outline-offset: 4px;
+    }
+
+    .nfc-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nfc-chip {
+      width: 34px;
+      height: 24px;
+      border-radius: 5px;
+      background: linear-gradient(135deg, #F0C27B, #C98B38);
+      border: 1px solid rgba(0, 0, 0, 0.25);
+    }
+
+    .nfc-card-brand {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      color: var(--ochre-light);
+      font-weight: 700;
+    }
+
+    .nfc-card-num {
+      font-family: var(--font-mono);
+      font-size: 0.92rem;
+      letter-spacing: 0.14em;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .nfc-card-foot {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.68rem;
+      color: #9FB0CC;
+      font-family: var(--font-mono);
+    }
+
+    .drag-hint {
+      font-size: 0.78rem;
+      color: var(--slate-muted);
+      text-align: center;
+    }
+
+    /* ---------- STAGE 2: TPS INVENTORY TABLE & RECEIPT ---------- */
+    .tps-grid {
+      display: grid;
+      grid-template-columns: 1.45fr 1fr;
+      gap: 16px;
+      flex: 1;
+      align-items: start;
+    }
+
+    /* Responsive table (following responsive-table guide) */
+    .table-wrapper {
+      overflow: auto;
+      max-inline-size: 100%;
+      max-block-size: 260px;
+      container-type: inline-size;
+      border: 1.5px solid var(--navy);
+      border-radius: var(--radius-md);
+      background: var(--white);
+    }
+
+    .table-wrapper:focus-visible {
+      outline: 2px solid var(--crimson);
+      outline-offset: 2px;
+    }
+
+    table.inv-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 0.84rem;
+      text-align: left;
+      --label-2: "Item";
+      --label-3: "Stock";
+      --label-4: "Threshold";
+      --label-5: "Status";
+    }
+
+    table.inv-table caption {
+      caption-side: top;
+      text-align: left;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 8px 12px;
+      background: #F1F4F9;
+      color: var(--navy);
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    table.inv-table thead {
+      position: sticky;
+      inset-block-start: 0;
+      z-index: 2;
+      background: var(--navy);
+      color: var(--white);
+    }
+
+    table.inv-table thead th {
+      padding: 8px 10px;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    table.inv-table tbody th,
+    table.inv-table tbody td {
+      padding: 10px;
+      border-bottom: 1px solid var(--border-soft);
+      white-space: nowrap;
+    }
+
+    table.inv-table tbody th {
+      position: sticky;
+      inset-inline-start: 0;
+      background: var(--white);
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--navy);
+      z-index: 1;
+    }
+
+    table.inv-table tbody tr.target-row th,
+    table.inv-table tbody tr.target-row td {
+      background: #FFFBF2;
+      font-weight: 600;
+    }
+
+    table.inv-table tbody tr.target-row.is-low th,
+    table.inv-table tbody tr.target-row.is-low td {
+      background: var(--crimson-light);
+      transition: background-color 0.35s ease;
+    }
+
+    @container (width < 430px) {
+      table.inv-table,
+      table.inv-table thead,
+      table.inv-table tbody,
+      table.inv-table tr,
+      table.inv-table th,
+      table.inv-table td {
+        display: block;
+      }
+
+      table.inv-table thead {
+        display: none;
+      }
+
+      table.inv-table tbody tr {
+        margin-block-end: 10px;
+        border-bottom: 2px solid var(--navy);
+      }
+
+      table.inv-table tbody th {
+        position: sticky;
+        inset-block-start: 0;
+        z-index: 2;
+        background: #EEF2F8;
+      }
+
+      table.inv-table tbody td {
+        white-space: normal;
+        padding: 6px 10px;
+      }
+
+      table.inv-table td:nth-child(2)::before { content: var(--label-2) ": "; font-weight: 700; color: var(--slate-muted); }
+      table.inv-table td:nth-child(3)::before { content: var(--label-3) ": "; font-weight: 700; color: var(--slate-muted); }
+      table.inv-table td:nth-child(4)::before { content: var(--label-4) ": "; font-weight: 700; color: var(--slate-muted); }
+      table.inv-table td:nth-child(5)::before { content: var(--label-5) ": "; font-weight: 700; color: var(--slate-muted); }
+    }
+
+    .status-chip {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 3px;
+      text-transform: uppercase;
+    }
+
+    .chip-ok { background: var(--success-bg); color: var(--success); border: 1px solid #A8DFC6; }
+    .chip-low { background: var(--crimson); color: var(--white); }
+
+    /* Digital Receipt */
+    .receipt-card {
+      background: var(--cream-card);
+      border: 1.5px solid var(--navy);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .receipt-head {
+      text-align: center;
+      border-bottom: 1px dashed var(--navy);
+      padding-bottom: 8px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+    }
+
+    .receipt-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .receipt-total {
+      border-top: 1px dashed var(--navy);
+      padding-top: 8px;
+      font-weight: 700;
+      font-size: 0.88rem;
+    }
+
+    .receipt-stamp {
+      margin-top: 4px;
+      text-align: center;
+      padding: 4px;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 0.72rem;
+      background: #EFECE3;
+      color: var(--slate);
+      border: 1px solid var(--border-soft);
+    }
+
+    .receipt-stamp.committed {
+      background: var(--success-bg);
+      color: var(--success);
+      border-color: var(--success);
+    }
+
+    /* ---------- STAGE 3: MICROSOFT TEAMS ALERT ---------- */
+    .teams-stage {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--cream);
+      border: 1.5px solid var(--border-soft);
+      border-radius: var(--radius-md);
+      padding: 22px;
+    }
+
+    .teams-card {
+      width: 100%;
+      max-width: 560px;
+      background: var(--white);
+      border: 1.5px solid var(--teams-purple);
+      border-left: 6px solid var(--teams-purple);
+      border-radius: var(--radius-md);
+      box-shadow: 0 12px 28px rgba(75, 83, 188, 0.14);
+      overflow: hidden;
+    }
+
+    .teams-topbar {
+      background: var(--teams-bg);
+      padding: 10px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(75, 83, 188, 0.18);
+    }
+
+    .teams-brand {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-weight: 700;
+      font-size: 0.86rem;
+      color: var(--teams-purple);
+    }
+
+    .bell-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--crimson);
+      color: var(--white);
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 999px;
+    }
+
+    .bell-icon-ring {
+      transform-origin: top center;
+      animation: bellSwing 1.4s ease-in-out infinite;
+    }
+
+    @keyframes bellSwing {
+      0%, 100% { transform: rotate(0deg); }
+      15% { transform: rotate(14deg); }
+      30% { transform: rotate(-12deg); }
+      45% { transform: rotate(8deg); }
+      60% { transform: rotate(0deg); }
+    }
+
+    .teams-body {
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .teams-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.8rem;
+      color: var(--slate-muted);
+    }
+
+    .bot-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: var(--navy);
+      color: var(--ochre);
+      display: grid;
+      place-items: center;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 0.76rem;
+      flex-shrink: 0;
+    }
+
+    .teams-alert-box {
+      background: #FFF7F8;
+      border: 1px solid #F2B8C1;
+      border-radius: 6px;
+      padding: 12px 14px;
+      font-size: 0.88rem;
+    }
+
+    .teams-alert-box h4 {
+      margin: 0 0 6px;
+      color: var(--crimson);
+      font-size: 0.92rem;
+    }
+
+    .teams-kv {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+    }
+
+    .teams-kv div {
+      background: var(--white);
+      padding: 6px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border-soft);
+    }
+
+    .teams-kv span {
+      display: block;
+      font-size: 0.64rem;
+      color: var(--slate-muted);
+    }
+
+    .teams-ack-note {
+      display: none;
+      font-size: 0.8rem;
+      color: var(--success);
+      background: var(--success-bg);
+      padding: 7px 10px;
+      border-radius: 5px;
+      font-weight: 600;
+    }
+
+    .teams-ack-note.shown {
+      display: block;
+    }
+
+    /* ---------- STAGE 4: DSS FORECAST MODEL ---------- */
+    .dss-grid {
+      display: grid;
+      grid-template-columns: 1.55fr 1fr;
+      gap: 16px;
+      flex: 1;
+      align-items: stretch;
+    }
+
+    .chart-box {
+      background: var(--cream-card);
+      border: 1.5px solid var(--navy);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--slate);
+      margin-bottom: 6px;
+    }
+
+    #dss-chart {
+      width: 100%;
+      height: 195px;
+      display: block;
+    }
+
+    .dss-controls {
+      background: var(--cream);
+      border: 1.5px solid var(--border-soft);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .scenario-pills {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+
+    .scenario-btn {
+      font-family: var(--font-sans);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 7px 6px;
+      border-radius: 5px;
+      border: 1.5px solid var(--border-soft);
+      background: var(--white);
+      color: var(--navy);
+      cursor: pointer;
+      transition: all 0.16s ease;
+    }
+
+    .scenario-btn.active {
+      background: var(--navy);
+      color: var(--white);
+      border-color: var(--navy);
+    }
+
+    .scenario-btn:focus-visible {
+      outline: 2px solid var(--crimson);
+      outline-offset: 2px;
+    }
+
+    /* Native Range Slider (following slider guide) */
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .slider-label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--navy);
+    }
+
+    .slider-val-badge {
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      color: var(--crimson);
+      font-weight: 700;
+    }
+
+    input[type="range"].dss-slider {
+      --slider-track-size: 0.5rem;
+      --slider-thumb-size: 1.25rem;
+      --slider-track-radius: 999px;
+      --slider-thumb-radius: 50%;
+      --slider-track-color: #CBD5E1;
+      --slider-fill-color: #B8253A;
+      --slider-thumb-color: #1E2942;
+      --slider-direction: to right;
+
+      --attr-min: attr(min type(<number>), 80);
+      --attr-max: attr(max type(<number>), 250);
+      --control-value: attr(value type(<number>), 100);
+      --slider-progress: calc(
+        progress(var(--control-value), var(--attr-min), var(--attr-max)) * 100%
+      );
+
+      appearance: none;
+      inline-size: 100%;
+      block-size: 2.3rem;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    @supports not (opacity: progress(1, 0, 100)) {
+      input[type="range"].dss-slider {
+        --slider-progress: calc(
+          (var(--control-value) - var(--attr-min)) /
+          (var(--attr-max) - var(--attr-min)) * 100%
+        );
+      }
+    }
+
+    /* WebKit/Blink */
+    input[type="range"].dss-slider::-webkit-slider-runnable-track {
+      block-size: var(--slider-track-size);
+      border: 0;
+      border-radius: var(--slider-track-radius);
+      background: linear-gradient(
+        var(--slider-direction),
+        var(--slider-fill-color) var(--slider-progress),
+        var(--slider-track-color) var(--slider-progress)
+      );
+    }
+
+    input[type="range"].dss-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      inline-size: var(--slider-thumb-size);
+      block-size: var(--slider-thumb-size);
+      margin-block-start: calc((var(--slider-track-size) - var(--slider-thumb-size)) / 2);
+      border: 2px solid var(--white);
+      border-radius: var(--slider-thumb-radius);
+      background: var(--slider-thumb-color);
+      box-shadow: 0 2px 6px rgba(30, 41, 66, 0.35);
+    }
+
+    /* Firefox */
+    input[type="range"].dss-slider::-moz-range-track {
+      block-size: var(--slider-track-size);
+      border: 0;
+      border-radius: var(--slider-track-radius);
+      background: var(--slider-track-color);
+    }
+
+    input[type="range"].dss-slider::-moz-range-progress {
+      block-size: var(--slider-track-size);
+      border-radius: var(--slider-track-radius);
+      background: var(--slider-fill-color);
+    }
+
+    input[type="range"].dss-slider::-moz-range-thumb {
+      inline-size: var(--slider-thumb-size);
+      block-size: var(--slider-thumb-size);
+      border: 2px solid var(--white);
+      border-radius: var(--slider-thumb-radius);
+      background: var(--slider-thumb-color);
+      box-shadow: 0 2px 6px rgba(30, 41, 66, 0.35);
+    }
+
+    input[type="range"].dss-slider:focus-visible {
+      outline: 2px solid var(--crimson);
+      outline-offset: 4px;
+    }
+
+    .dss-kpi-card {
+      background: var(--navy);
+      color: var(--white);
+      border-radius: var(--radius-sm);
+      padding: 11px 13px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .dss-kpi-label {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: #9FB0CC;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .dss-kpi-sub {
+      font-size: 0.74rem;
+      color: #CBD5E1;
+      margin-top: 2px;
+    }
+
+    .dss-kpi-num {
+      font-family: var(--font-mono);
+      font-size: 1.55rem;
+      font-weight: 700;
+      color: var(--ochre);
+    }
+
+    /* ---------- STAGE 5: AI AUTOMATED PO & ROBOTIC ARM ---------- */
+    .ai-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.15fr;
+      gap: 16px;
+      flex: 1;
+      align-items: stretch;
+    }
+
+    .po-card {
+      background: var(--cream-card);
+      border: 1.5px solid var(--navy);
+      border-radius: var(--radius-md);
+      padding: 15px 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .po-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1.5px solid var(--navy);
+      padding-bottom: 8px;
+    }
+
+    .po-id {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 0.85rem;
+      color: var(--navy);
+    }
+
+    .po-badge {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 3px 7px;
+      border-radius: 3px;
+      background: var(--ochre-light);
+      color: var(--navy);
+      border: 1px solid var(--ochre-dark);
+    }
+
+    .po-badge.executed {
+      background: var(--success-bg);
+      color: var(--success);
+      border-color: var(--success);
+    }
+
+    .po-details {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.82rem;
+    }
+
+    .po-row {
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px dashed var(--border-soft);
+      padding-bottom: 4px;
+    }
+
+    .po-row span:first-child {
+      color: var(--slate-muted);
+    }
+
+    .po-row strong {
+      font-family: var(--font-mono);
+      color: var(--navy);
+    }
+
+    .robot-stage {
+      background: var(--cream);
+      border: 1.5px solid var(--navy);
+      border-radius: var(--radius-md);
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #robot-svg {
+      width: 100%;
+      height: 195px;
+      display: block;
+    }
+
+    /* Robotic Arm Animation */
+    #arm-upper {
+      transform-origin: 95px 148px;
+      transition: transform 0.65s cubic-bezier(0.34, 1.3, 0.64, 1);
+    }
+
+    #arm-fore {
+      transform-origin: 145px 86px;
+      transition: transform 0.65s cubic-bezier(0.34, 1.3, 0.64, 1);
+    }
+
+    #restock-crate {
+      transition: transform 0.75s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .robot-stage.picking #arm-upper {
+      transform: rotate(18deg);
+    }
+
+    .robot-stage.picking #arm-fore {
+      transform: rotate(22deg);
+    }
+
+    .robot-stage.moving #arm-upper {
+      transform: rotate(-16deg);
+    }
+
+    .robot-stage.moving #arm-fore {
+      transform: rotate(-12deg);
+    }
+
+    .robot-stage.moving #restock-crate {
+      transform: translate(118px, -18px);
+    }
+
+    .robot-stage.dispatched #arm-upper {
+      transform: rotate(0deg);
+    }
+
+    .robot-stage.dispatched #arm-fore {
+      transform: rotate(0deg);
+    }
+
+    .robot-stage.dispatched #restock-crate {
+      transform: translate(152px, 0px);
+    }
+
+    .conveyor-treads {
+      stroke-dasharray: 8 8;
+    }
+
+    .robot-stage.dispatched .conveyor-treads,
+    .robot-stage.moving .conveyor-treads {
+      animation: conveyorMove 0.6s linear infinite;
+    }
+
+    @keyframes conveyorMove {
+      from { stroke-dashoffset: 16; }
+      to { stroke-dashoffset: 0; }
+    }
+
+    .complete-banner {
+      display: none;
+      margin-top: 4px;
+      background: var(--success-bg);
+      border: 1.5px solid var(--success);
+      border-radius: var(--radius-md);
+      padding: 11px 14px;
+      color: #134733;
+      font-size: 0.85rem;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .complete-banner.shown {
+      display: flex;
+    }
+
+    .stage-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border-soft);
+      margin-top: auto;
+    }
+
+    .autoplay-toast {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      font-weight: 700;
+      color: var(--crimson);
+      background: var(--crimson-light);
+      border: 1px solid var(--crimson);
+      padding: 5px 10px;
+      border-radius: 999px;
+    }
+
+    .autoplay-toast.active {
+      display: inline-flex;
+    }
+
+    /* ==========================================================================
+       RESPONSIVE BREAKPOINTS
+       ========================================================================== */
+    @media (max-width: 980px) {
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+      .telemetry-bar {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .telemetry-cell:nth-child(2) {
+        border-right: none;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .pos-arena,
+      .tps-grid,
+      .dss-grid,
+      .ai-grid {
+        grid-template-columns: 1fr;
+      }
+      .telemetry-bar {
+        grid-template-columns: 1fr;
+      }
+      .telemetry-cell {
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+        padding-bottom: 8px;
+        padding-right: 0;
+      }
+      .telemetry-cell:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Screen reader live region registered on page load -->
+  <div id="sr-announcer" class="visually-hidden" aria-live="polite"></div>
+
+  <div class="app-shell">
+    <!-- TOP HEADER -->
+    <header class="masthead">
+      <div>
+        <div class="masthead-kicker">
+          <span class="dot" aria-hidden="true"></span>
+          <span>FIG. 01 // ENTERPRISE SYSTEMS ARCHITECTURE</span>
+        </div>
+        <h1>Synthesis: Anatomy of a Single Transaction</h1>
+        <p class="masthead-subtitle">
+          How hardware, software, and information systems combine to automate the modern enterprise
+        </p>
+      </div>
+
+      <div class="header-actions">
+        <div id="autoplay-toast" class="autoplay-toast" role="status">
+          <span>ENTERPRISE SPEED</span>
+          <span id="autoplay-timer">0.0s</span>
+        </div>
+        <button
+          type="button"
+          id="btn-autoplay"
+          class="btn btn-autoplay"
+          disabled
+          title="Complete the 5-stage manual walkthrough to unlock Real-Time Automation"
+        >
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M4 2.5L13 8L4 13.5V2.5Z" fill="currentColor"/>
+          </svg>
+          <span id="autoplay-label">Simulate Real-Time Automation (Locked)</span>
+        </button>
+        <button type="button" id="btn-reset" class="btn">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M13.5 8A5.5 5.5 0 1 1 11.9 4.1M13.5 2.5V5.5H10.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>Simulate Another Transaction</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- LIVE SYSTEM TELEMETRY BAR -->
+    <section class="telemetry-bar" aria-label="Live System Telemetry">
+      <div class="telemetry-cell">
+        <span class="telemetry-label">Tracked Retail SKU</span>
+        <div class="telemetry-value">
+          <span>AeroPulse Watch</span>
+          <span class="telemetry-pill pill-ochre">SKU-4092</span>
+        </div>
+      </div>
+      <div class="telemetry-cell">
+        <span class="telemetry-label">Current Item Stock (Threshold: 4)</span>
+        <div class="telemetry-value">
+          <span id="tel-stock" class="stock-num">5 units</span>
+          <span id="tel-stock-badge" class="telemetry-pill pill-ok">IN STOCK</span>
+        </div>
+      </div>
+      <div class="telemetry-cell">
+        <span class="telemetry-label">Transaction Status</span>
+        <div class="telemetry-value">
+          <span id="tel-status">Awaiting NFC Tap</span>
+        </div>
+      </div>
+      <div class="telemetry-cell">
+        <span class="telemetry-label">Active System Layer</span>
+        <div class="telemetry-value">
+          <span id="tel-layer" class="telemetry-pill pill-ochre">Hardware</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- CENTER ISOMETRIC 5-STAGE PIPELINE -->
+    <section class="pipeline-card" aria-label="Five-stage enterprise transaction pipeline">
+      <div class="pipeline-header">
+        <div class="pipeline-title">
+          <span>END-TO-END DATA FLOW PIPELINE</span>
+          <span style="color: var(--crimson);">//</span>
+          <span id="pipeline-step-label">STAGE 01 OF 05</span>
+        </div>
+        <div class="pipeline-legend" aria-hidden="true">
+          <span class="legend-item"><span class="legend-swatch" style="background: var(--ochre);"></span> Active Stage</span>
+          <span class="legend-item"><span class="legend-swatch" style="background: var(--navy);"></span> Completed</span>
+          <span class="legend-item"><span class="legend-swatch" style="background: var(--crimson);"></span> Live Data Pulse</span>
+        </div>
+      </div>
+
+      <div class="pipeline-svg-wrap">
+        <svg id="pipeline-svg" viewBox="0 -10 1120 248" role="img" aria-label="Isometric diagram of 5 connected enterprise system stages: NFC Hardware, TPS Database, Teams Alert, DSS Forecast, and AI Robotic Arm">
+          <defs>
+            <filter id="pulse-glow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="3.5" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+
+          <!-- Subtle blueprint baseline -->
+          <line x1="40" y1="184" x2="1080" y2="184" stroke="rgba(30,41,66,0.12)" stroke-width="1" stroke-dasharray="3 5" />
+
+          <!-- CONNECTING PIPES BETWEEN THE 5 PEDESTALS -->
+          <!-- Pipe 1 -> 2 -->
+          <g id="pipe-1">
+            <path d="M 164 136 L 276 136" class="pipe-base" />
+            <path id="pipe-active-1" d="M 164 136 L 276 136" class="pipe-active" />
+            <path id="pipe-dash-1" d="M 164 136 L 276 136" class="pipe-flow-dashes" />
+          </g>
+          <!-- Pipe 2 -> 3 -->
+          <g id="pipe-2">
+            <path d="M 384 136 L 496 136" class="pipe-base" />
+            <path id="pipe-active-2" d="M 384 136 L 496 136" class="pipe-active" />
+            <path id="pipe-dash-2" d="M 384 136 L 496 136" class="pipe-flow-dashes" />
+          </g>
+          <!-- Pipe 3 -> 4 -->
+          <g id="pipe-3">
+            <path d="M 604 136 L 716 136" class="pipe-base" />
+            <path id="pipe-active-3" d="M 604 136 L 716 136" class="pipe-active" />
+            <path id="pipe-dash-3" d="M 604 136 L 716 136" class="pipe-flow-dashes" />
+          </g>
+          <!-- Pipe 4 -> 5 -->
+          <g id="pipe-4">
+            <path d="M 824 136 L 936 136" class="pipe-base" />
+            <path id="pipe-active-4" d="M 824 136 L 936 136" class="pipe-active" />
+            <path id="pipe-dash-4" d="M 824 136 L 936 136" class="pipe-flow-dashes" />
+          </g>
+
+          <!-- Traveling crimson data pulse packet -->
+          <g id="pulse-packet" class="pulse-packet" filter="url(#pulse-glow)">
+            <circle cx="0" cy="0" r="7" fill="#B8253A" />
+            <circle cx="0" cy="0" r="3" fill="#FFF" />
+          </g>
+
+          <!-- ================= PEDESTAL 1: HARDWARE (NFC CARD) ================= -->
+          <g id="pedestal-1" class="pedestal-group is-active" data-stage="1" transform="translate(110, 0)">
+            <!-- Isometric shadow -->
+            <polygon points="0,180 62,155 0,130 -62,155" fill="rgba(30,41,66,0.09)" />
+            <g class="pedestal-inner">
+              <!-- Active crimson aura ring -->
+              <polygon class="ped-ring" points="0,104 68,131 0,158 -68,131" fill="none" stroke="#B8253A" stroke-width="2" stroke-dasharray="4 3" />
+              <!-- Isometric block faces -->
+              <polygon class="ped-left" points="-56,130 0,153 0,174 -56,151" />
+              <polygon class="ped-right" points="56,130 0,153 0,174 56,151" />
+              <polygon class="ped-top" points="0,107 56,130 0,153 -56,130" />
+              <!-- Icon: NFC Smart Card -->
+              <g transform="translate(0, 72)">
+                <rect x="-28" y="-16" width="56" height="36" rx="5" fill="#1E2942" stroke="#131B2E" stroke-width="1.6" />
+                <rect x="-20" y="-6" width="13" height="10" rx="2" fill="#D99B4E" />
+                <!-- NFC Waves -->
+                <path d="M 8 -6 A 9 9 0 0 1 8 8" fill="none" stroke="#FCFBF7" stroke-width="1.8" stroke-linecap="round" />
+                <path d="M 14 -10 A 14 14 0 0 1 14 12" fill="none" stroke="#D99B4E" stroke-width="1.8" stroke-linecap="round" />
+                <circle cx="4" cy="1" r="1.8" fill="#B8253A" />
+              </g>
+              <!-- Checkmark badge -->
+              <g transform="translate(46, 100)">
+                <g class="stage-check">
+                  <circle cx="0" cy="0" r="10" fill="#1E6F50" stroke="#FFF" stroke-width="1.5" />
+                  <path d="M -4 0 L -1 3 L 4.5 -3" fill="none" stroke="#FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </g>
+              </g>
+            </g>
+            <!-- Labels -->
+            <text x="0" y="198" text-anchor="middle" font-family="var(--font-mono)" font-size="11" font-weight="700" fill="#1E2942">01 · NFC INPUT</text>
+            <rect x="-46" y="205" width="92" height="20" rx="4" fill="#FDF3E2" stroke="#B57B30" stroke-width="1" />
+            <text x="0" y="219" text-anchor="middle" font-family="var(--font-mono)" font-size="9.5" font-weight="700" fill="#1E2942">HARDWARE</text>
+          </g>
+
+          <!-- ================= PEDESTAL 2: TPS (DATABASE & RECEIPT) ================= -->
+          <g id="pedestal-2" class="pedestal-group" data-stage="2" transform="translate(330, 0)">
+            <polygon points="0,180 62,155 0,130 -62,155" fill="rgba(30,41,66,0.09)" />
+            <g class="pedestal-inner">
+              <polygon class="ped-ring" points="0,104 68,131 0,158 -68,131" fill="none" stroke="#B8253A" stroke-width="2" stroke-dasharray="4 3" />
+              <polygon class="ped-left" points="-56,130 0,153 0,174 -56,151" />
+              <polygon class="ped-right" points="56,130 0,153 0,174 56,151" />
+              <polygon class="ped-top" points="0,107 56,130 0,153 -56,130" />
+              <!-- Icon: Database Cylinder + Receipt -->
+              <g transform="translate(0, 72)">
+                <path d="M -28 -10 L -28 16 C -28 21 -4 21 -4 16 L -4 -10" fill="#1E2942" stroke="#131B2E" stroke-width="1.5" />
+                <ellipse cx="-16" cy="-10" rx="12" ry="5" fill="#D99B4E" stroke="#131B2E" stroke-width="1.5" />
+                <path d="M -28 2 C -28 7 -4 7 -4 2" fill="none" stroke="#9FB0CC" stroke-width="1.3" />
+                <!-- Mini receipt -->
+                <path d="M 3 -18 H 27 V 17 L 23 13 L 19 17 L 15 13 L 11 17 L 7 13 L 3 17 Z" fill="#FFFFFF" stroke="#1E2942" stroke-width="1.5" />
+                <line x1="8" y1="-10" x2="22" y2="-10" stroke="#1E2942" stroke-width="1.5" />
+                <line x1="8" y1="-4" x2="20" y2="-4" stroke="#64748B" stroke-width="1.4" />
+                <line x1="8" y1="2" x2="22" y2="2" stroke="#B8253A" stroke-width="1.6" />
+              </g>
+              <g transform="translate(46, 100)">
+                <g class="stage-check">
+                  <circle cx="0" cy="0" r="10" fill="#1E6F50" stroke="#FFF" stroke-width="1.5" />
+                  <path d="M -4 0 L -1 3 L 4.5 -3" fill="none" stroke="#FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </g>
+              </g>
+            </g>
+            <text x="0" y="198" text-anchor="middle" font-family="var(--font-mono)" font-size="11" font-weight="700" fill="#1E2942">02 · SALE &amp; LEDGER</text>
+            <rect x="-74" y="205" width="148" height="20" rx="4" fill="#E9EFF9" stroke="#1E2942" stroke-width="1" />
+            <text x="0" y="219" text-anchor="middle" font-family="var(--font-mono)" font-size="9.2" font-weight="700" fill="#1E2942">INFO SYSTEM: TPS</text>
+          </g>
+
+          <!-- ================= PEDESTAL 3: APP SOFTWARE (TEAMS ALERT) ================= -->
+          <g id="pedestal-3" class="pedestal-group" data-stage="3" transform="translate(550, 0)">
+            <polygon points="0,180 62,155 0,130 -62,155" fill="rgba(30,41,66,0.09)" />
+            <g class="pedestal-inner">
+              <polygon class="ped-ring" points="0,104 68,131 0,158 -68,131" fill="none" stroke="#B8253A" stroke-width="2" stroke-dasharray="4 3" />
+              <polygon class="ped-left" points="-56,130 0,153 0,174 -56,151" />
+              <polygon class="ped-right" points="56,130 0,153 0,174 56,151" />
+              <polygon class="ped-top" points="0,107 56,130 0,153 -56,130" />
+              <!-- Icon: Teams Chat Alert Bubble -->
+              <g transform="translate(0, 70)">
+                <path d="M -26 -16 H 22 A 6 6 0 0 1 28 -10 V 10 A 6 6 0 0 1 22 16 H -6 L -18 24 V 16 H -26 A 6 6 0 0 1 -32 10 V -10 A 6 6 0 0 1 -26 -16 Z" fill="#4B53BC" stroke="#1E2942" stroke-width="1.5" />
+                <line x1="-20" y1="-4" x2="12" y2="-4" stroke="#FFF" stroke-width="2.2" stroke-linecap="round" />
+                <line x1="-20" y1="4" x2="4" y2="4" stroke="#D7DAFA" stroke-width="2.2" stroke-linecap="round" />
+                <!-- Crimson Notification Bell Badge -->
+                <circle cx="24" cy="-14" r="10" fill="#B8253A" stroke="#FFF" stroke-width="1.6" />
+                <text x="24" y="-10" text-anchor="middle" font-family="var(--font-mono)" font-size="11" font-weight="700" fill="#FFF">!</text>
+              </g>
+              <g transform="translate(46, 100)">
+                <g class="stage-check">
+                  <circle cx="0" cy="0" r="10" fill="#1E6F50" stroke="#FFF" stroke-width="1.5" />
+                  <path d="M -4 0 L -1 3 L 4.5 -3" fill="none" stroke="#FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </g>
+              </g>
+            </g>
+            <text x="0" y="198" text-anchor="middle" font-family="var(--font-mono)" font-size="11" font-weight="700" fill="#1E2942">03 · TEAMS ALERT</text>
+            <rect x="-76" y="205" width="152" height="20" rx="4" fill="#F3F4FC" stroke="#4B53BC" stroke-width="1" />
+            <text x="0" y="219" text-anchor="middle" font-family="var(--font-mono)" font-size="9.2" font-weight="700" fill="#4B53BC">APPLICATION SOFTWARE</text>
+          </g>
+
+          <!-- ================= PEDESTAL 4: DSS (FORECAST CHART) ================= -->
+          <g id="pedestal-4" class="pedestal-group" data-stage="4" transform="translate(770, 0)">
+            <polygon points="0,180 62,155 0,130 -62,155" fill="rgba(30,41,66,0.09)" />
+            <g class="pedestal-inner">
+              <polygon class="ped-ring" points="0,104 68,131 0,158 -68,131" fill="none" stroke="#B8253A" stroke-width="2" stroke-dasharray="4 3" />
+              <polygon class="ped-left" points="-56,130 0,153 0,174 -56,151" />
+              <polygon class="ped-right" points="56,130 0,153 0,174 56,151" />
+              <polygon class="ped-top" points="0,107 56,130 0,153 -56,130" />
+              <!-- Icon: Forecast Line Chart -->
+              <g transform="translate(0, 72)">
+                <rect x="-28" y="-18" width="56" height="38" rx="4" fill="#FFFFFF" stroke="#1E2942" stroke-width="1.6" />
+                <line x1="-20" y1="12" x2="22" y2="12" stroke="#CBD5E1" stroke-width="1.2" />
+                <line x1="-20" y1="-10" x2="-20" y2="12" stroke="#CBD5E1" stroke-width="1.2" />
+                <polyline points="-18,8 -7,3 4,6 18,-10" fill="none" stroke="#B8253A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+                <circle cx="18" cy="-10" r="3.2" fill="#D99B4E" stroke="#1E2942" stroke-width="1.2" />
+              </g>
+              <g transform="translate(46, 100)">
+                <g class="stage-check">
+                  <circle cx="0" cy="0" r="10" fill="#1E6F50" stroke="#FFF" stroke-width="1.5" />
+                  <path d="M -4 0 L -1 3 L 4.5 -3" fill="none" stroke="#FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </g>
+              </g>
+            </g>
+            <text x="0" y="198" text-anchor="middle" font-family="var(--font-mono)" font-size="11" font-weight="700" fill="#1E2942">04 · DEMAND MODEL</text>
+            <rect x="-74" y="205" width="148" height="20" rx="4" fill="#FDF3E2" stroke="#B57B30" stroke-width="1" />
+            <text x="0" y="219" text-anchor="middle" font-family="var(--font-mono)" font-size="9.2" font-weight="700" fill="#7C4F12">INFO SYSTEM: DSS</text>
+          </g>
+
+          <!-- ================= PEDESTAL 5: INTELLIGENT SYSTEM (AI ROBOTIC ARM) ================= -->
+          <g id="pedestal-5" class="pedestal-group" data-stage="5" transform="translate(990, 0)">
+            <polygon points="0,180 62,155 0,130 -62,155" fill="rgba(30,41,66,0.09)" />
+            <g class="pedestal-inner">
+              <polygon class="ped-ring" points="0,104 68,131 0,158 -68,131" fill="none" stroke="#B8253A" stroke-width="2" stroke-dasharray="4 3" />
+              <polygon class="ped-left" points="-56,130 0,153 0,174 -56,151" />
+              <polygon class="ped-right" points="56,130 0,153 0,174 56,151" />
+              <polygon class="ped-top" points="0,107 56,130 0,153 -56,130" />
+              <!-- Icon: Robotic Arm & Parcel -->
+              <g transform="translate(0, 72)">
+                <rect x="-24" y="12" width="24" height="8" rx="2" fill="#1E2942" />
+                <line x1="-12" y1="12" x2="-2" y2="-10" stroke="#1E2942" stroke-width="5" stroke-linecap="round" />
+                <line x1="-2" y1="-10" x2="18" y2="-2" stroke="#D99B4E" stroke-width="4.5" stroke-linecap="round" />
+                <circle cx="-12" cy="12" r="3.5" fill="#D99B4E" stroke="#1E2942" stroke-width="1.2" />
+                <circle cx="-2" cy="-10" r="4" fill="#B8253A" stroke="#1E2942" stroke-width="1.2" />
+                <!-- Gripper & Mini Crate -->
+                <rect x="11" y="4" width="14" height="14" rx="2" fill="#D99B4E" stroke="#1E2942" stroke-width="1.4" />
+                <line x1="18" y1="4" x2="18" y2="18" stroke="#1E2942" stroke-width="1" />
+              </g>
+              <g transform="translate(46, 100)">
+                <g class="stage-check">
+                  <circle cx="0" cy="0" r="10" fill="#1E6F50" stroke="#FFF" stroke-width="1.5" />
+                  <path d="M -4 0 L -1 3 L 4.5 -3" fill="none" stroke="#FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </g>
+              </g>
+            </g>
+            <text x="0" y="198" text-anchor="middle" font-family="var(--font-mono)" font-size="11" font-weight="700" fill="#1E2942">05 · AUTO-RESTOCK</text>
+            <rect x="-78" y="205" width="156" height="20" rx="4" fill="#FCE8EB" stroke="#B8253A" stroke-width="1" />
+            <text x="0" y="219" text-anchor="middle" font-family="var(--font-mono)" font-size="9.2" font-weight="700" fill="#B8253A">INTELLIGENT SYSTEM: AI</text>
+          </g>
+        </svg>
+      </div>
+    </section>
+
+    <!-- INTERACTIVE WORKSPACE -->
+    <main class="workspace">
+      <!-- LEFT: CONCEPT & SYSTEM HANDOFF BRIEF -->
+      <aside class="brief-panel" aria-live="polite">
+        <div>
+          <span id="brief-badge" class="layer-badge layer-hardware">Hardware</span>
+          <div id="brief-stage-num" class="brief-stage-num">Stage 1 of 5 · Physical Input</div>
+          <h2 id="brief-title" class="brief-title">NFC Smart Card Capture</h2>
+          <p id="brief-desc" class="brief-desc">
+            A customer taps a contactless NFC Smart Card against the point-of-sale terminal. Physical radio-frequency hardware converts the tap into an encrypted payment token.
+          </p>
+
+          <div class="handoff-box">
+            <div class="handoff-row">
+              <span class="handoff-label">Incoming Signal</span>
+              <span id="brief-in" class="handoff-data">Customer checkout · 1× SKU-4092 ($249.00)</span>
+            </div>
+            <div class="handoff-row">
+              <span class="handoff-label">Next Layer Handoff</span>
+              <span id="brief-out" class="handoff-data">Encrypted NFC Token → Information System (TPS)</span>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-family: var(--font-mono); font-size: 0.68rem; color: var(--slate-muted); margin-bottom: 6px; display: flex; justify-content: space-between;">
+            <span>TRANSACTION LIFECYCLE</span>
+            <span id="brief-progress-text">1 / 5</span>
+          </div>
+          <div class="stage-progress-dots" aria-hidden="true">
+            <div class="prog-dot active" data-dot="1"></div>
+            <div class="prog-dot" data-dot="2"></div>
+            <div class="prog-dot" data-dot="3"></div>
+            <div class="prog-dot" data-dot="4"></div>
+            <div class="prog-dot" data-dot="5"></div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- RIGHT: HANDS-ON STAGE SIMULATION -->
+      <section class="stage-panel" aria-label="Interactive Stage Workspace">
+
+        <!-- ==================== STAGE 1: HARDWARE (NFC) ==================== -->
+        <div id="stage-1" class="stage-view is-visible">
+          <div class="stage-header-bar">
+            <p class="stage-instruction">
+              <strong>Action:</strong> Drag the contactless smart card onto the POS reader—or click <strong>Tap to Pay</strong>.
+            </p>
+            <button type="button" id="btn-tap-pay" class="btn btn-crimson">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M5 11a4 4 0 0 1 0-6M8 13a7 7 0 0 1 0-10M11 14.5a9.5 9.5 0 0 1 0-13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              </svg>
+              <span>Tap to Pay</span>
+            </button>
+          </div>
+
+          <div id="pos-arena" class="pos-arena">
+            <!-- POS Reader -->
+            <div id="pos-terminal" class="pos-terminal" aria-label="Point of Sale NFC Card Reader">
+              <div class="pos-screen">
+                <div class="pos-sku">SKU-4092 · AEROPULSE WATCH</div>
+                <div class="pos-amount">$249.00</div>
+                <div id="pos-status" class="pos-status">READY · TAP CARD</div>
+              </div>
+              <div id="nfc-zone" class="nfc-zone">
+                <span class="nfc-ripple" aria-hidden="true"></span>
+                <span class="nfc-ripple r2" aria-hidden="true"></span>
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+                  <circle cx="10" cy="16" r="2.2" fill="#D99B4E"/>
+                  <path d="M14 11.5a6.5 6.5 0 0 1 0 9" stroke="#D99B4E" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M18.5 8a11 11 0 0 1 0 16" stroke="#FCFBF7" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M23 5a15.5 15.5 0 0 1 0 22" stroke="#9FB0CC" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                <span class="nfc-zone-label">NFC Reader Zone</span>
+              </div>
+            </div>
+
+            <!-- Interactive Draggable NFC Card -->
+            <div class="card-dock">
+              <div
+                id="nfc-card"
+                class="nfc-card"
+                role="button"
+                tabindex="0"
+                aria-label="Contactless NFC Smart Card. Drag onto the POS reader or press Enter to tap and pay."
+              >
+                <div class="nfc-card-top">
+                  <div class="nfc-chip" aria-hidden="true"></div>
+                  <span class="nfc-card-brand">MERIDIAN NFC</span>
+                </div>
+                <div class="nfc-card-num">•••• •••• •••• 4821</div>
+                <div class="nfc-card-foot">
+                  <span>CONTACTLESS EMV</span>
+                  <span>13.56 MHz</span>
+                </div>
+              </div>
+              <span class="drag-hint">Drag card onto reader or click card to tap</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== STAGE 2: TPS (DATABASE & RECEIPT) ==================== -->
+        <div id="stage-2" class="stage-view">
+          <div class="stage-header-bar">
+            <p class="stage-instruction">
+              <strong>Action:</strong> Commit the captured payment to decrement live inventory and generate the receipt.
+            </p>
+            <button type="button" id="btn-commit-tps" class="btn btn-primary">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M3 8.5L6.5 12L13 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>Commit Transaction</span>
+            </button>
+          </div>
+
+          <div class="tps-grid">
+            <div tabindex="0" role="region" aria-labelledby="inv-table-caption" class="table-wrapper">
+              <table class="inv-table">
+                <caption id="inv-table-caption">LIVE DB: STORE_14.INVENTORY_LEDGER</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">SKU</th>
+                    <th scope="col">Item</th>
+                    <th scope="col">Stock</th>
+                    <th scope="col">Threshold</th>
+                    <th scope="col">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th scope="row">SKU-4018</th>
+                    <td>Lumen Desk Lamp</td>
+                    <td>19</td>
+                    <td>6</td>
+                    <td><span class="status-chip chip-ok">OK</span></td>
+                  </tr>
+                  <tr id="target-inv-row" class="target-row">
+                    <th scope="row">SKU-4092</th>
+                    <td>AeroPulse Watch</td>
+                    <td id="tps-stock-cell" style="font-family: var(--font-mono); font-size: 0.95rem;">5</td>
+                    <td style="font-family: var(--font-mono);">4</td>
+                    <td><span id="tps-status-chip" class="status-chip chip-ok">OK</span></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">SKU-4105</th>
+                    <td>Kinetix Earbuds</td>
+                    <td>14</td>
+                    <td>5</td>
+                    <td><span class="status-chip chip-ok">OK</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="receipt-card" aria-label="Digital POS Receipt">
+              <div class="receipt-head">MERIDIAN RETAIL · STORE #14</div>
+              <div class="receipt-line"><span>TXN ID:</span><span>TXN-2026-8841</span></div>
+              <div class="receipt-line"><span>AUTH TOKEN:</span><span>#8F3A-NFC</span></div>
+              <div class="receipt-line"><span>1× AeroPulse Watch</span><span>$249.00</span></div>
+              <div class="receipt-line receipt-total"><span>TOTAL PAID</span><span>$249.00</span></div>
+              <div id="receipt-stamp" class="receipt-stamp">STATUS: PENDING TPS COMMIT</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== STAGE 3: APPLICATION SOFTWARE (TEAMS) ==================== -->
+        <div id="stage-3" class="stage-view">
+          <div class="stage-header-bar">
+            <p class="stage-instruction">
+              <strong>Action:</strong> As the Regional Manager, acknowledge the automated Microsoft Teams alert to escalate to forecasting.
+            </p>
+          </div>
+
+          <div class="teams-stage">
+            <article class="teams-card" aria-label="Microsoft Teams Low Inventory Alert">
+              <div class="teams-topbar">
+                <div class="teams-brand">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <rect x="2" y="4" width="14" height="16" rx="3" fill="#4B53BC"/>
+                    <path d="M6.5 9.5H11.5M9 9.5V15.5" stroke="#FFF" stroke-width="2" stroke-linecap="round"/>
+                    <circle cx="19" cy="8" r="2.5" fill="#7B83EB"/>
+                    <path d="M16.5 13C16.5 11.8 17.5 11 19 11C20.5 11 21.5 11.8 21.5 13V17.5H16.5V13Z" fill="#7B83EB"/>
+                  </svg>
+                  <span>Microsoft Teams · #regional-ops-alerts</span>
+                </div>
+                <span class="bell-badge">
+                  <svg class="bell-icon-ring" width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M8 2a4 4 0 0 0-4 4v2.6L2.8 10.8A.6.6 0 0 0 3.3 11.7h9.4a.6.6 0 0 0 .5-.9L12 8.6V6a4 4 0 0 0-4-4Z" fill="currentColor"/>
+                    <circle cx="8" cy="13.5" r="1.3" fill="currentColor"/>
+                  </svg>
+                  <span>HIGH PRIORITY</span>
+                </span>
+              </div>
+
+              <div class="teams-body">
+                <div class="teams-meta">
+                  <div class="bot-avatar" aria-hidden="true">TPS</div>
+                  <div>
+                    <strong style="color: var(--navy);">Inventory Webhook Bot</strong>
+                    <div>Triggered by TXN-2026-8841 · Just now</div>
+                  </div>
+                </div>
+
+                <div class="teams-alert-box">
+                  <h4>Low Inventory Threshold Reached — Store #14</h4>
+                  <div><strong>AeroPulse Watch (SKU-4092)</strong> dropped to its reorder threshold immediately after checkout.</div>
+                  <div class="teams-kv">
+                    <div><span>ON HAND</span><strong>4 units</strong></div>
+                    <div><span>THRESHOLD</span><strong>4 units</strong></div>
+                    <div><span>NEXT STEP</span><strong>Open DSS</strong></div>
+                  </div>
+                </div>
+
+                <div id="teams-ack-note" class="teams-ack-note">
+                  ✓ Acknowledged by Regional Manager — Opening Decision Support System...
+                </div>
+
+                <div style="display: flex; justify-content: flex-end;">
+                  <button type="button" id="btn-ack-teams" class="btn btn-crimson">
+                    <span>Acknowledge &amp; Open Alert</span>
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M3 8H13M9 4L13 8L9 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <!-- ==================== STAGE 4: DSS (FORECAST MODEL) ==================== -->
+        <div id="stage-4" class="stage-view">
+          <div class="stage-header-bar">
+            <p class="stage-instruction">
+              <strong>Action:</strong> Adjust the seasonal demand scenario or slider to calculate the <strong>Optimal Restock Quantity</strong>.
+            </p>
+            <button type="button" id="btn-approve-dss" class="btn btn-ochre">
+              <span>Approve Forecast Model</span>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M3 8H13M9 4L13 8L9 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="dss-grid">
+            <div class="chart-box">
+              <div class="chart-header">
+                <span>30-DAY DEMAND PROJECTION (UNITS / WK)</span>
+                <span id="chart-scenario-tag" style="color: var(--crimson); font-weight: 700;">STANDARD (1.0×)</span>
+              </div>
+              <svg id="dss-chart" viewBox="0 0 420 190" role="img" aria-label="Interactive seasonal demand forecast line chart">
+                <!-- Gridlines -->
+                <line x1="36" y1="25" x2="404" y2="25" stroke="rgba(30,41,66,0.09)" stroke-dasharray="3 3" />
+                <line x1="36" y1="65" x2="404" y2="65" stroke="rgba(30,41,66,0.09)" stroke-dasharray="3 3" />
+                <line x1="36" y1="105" x2="404" y2="105" stroke="rgba(30,41,66,0.09)" stroke-dasharray="3 3" />
+                <line x1="36" y1="145" x2="404" y2="145" stroke="rgba(30,41,66,0.22)" />
+                <!-- Y-axis labels -->
+                <text x="28" y="29" text-anchor="end" font-family="var(--font-mono)" font-size="9" fill="#64748B">45</text>
+                <text x="28" y="69" text-anchor="end" font-family="var(--font-mono)" font-size="9" fill="#64748B">30</text>
+                <text x="28" y="109" text-anchor="end" font-family="var(--font-mono)" font-size="9" fill="#64748B">15</text>
+                <text x="28" y="149" text-anchor="end" font-family="var(--font-mono)" font-size="9" fill="#64748B">0</text>
+                <!-- X-axis labels -->
+                <text x="46" y="164" text-anchor="middle" font-family="var(--font-mono)" font-size="9" fill="#64748B">W-2</text>
+                <text x="116" y="164" text-anchor="middle" font-family="var(--font-mono)" font-size="9" fill="#64748B">W-1</text>
+                <text x="186" y="164" text-anchor="middle" font-family="var(--font-mono)" font-size="9" fill="#1E2942" font-weight="700">NOW</text>
+                <text x="256" y="164" text-anchor="middle" font-family="var(--font-mono)" font-size="9" fill="#64748B">W+1</text>
+                <text x="326" y="164" text-anchor="middle" font-family="var(--font-mono)" font-size="9" fill="#64748B">W+2</text>
+                <text x="396" y="164" text-anchor="middle" font-family="var(--font-mono)" font-size="9" fill="#64748B">W+3</text>
+
+                <!-- Divider at NOW -->
+                <line x1="186" y1="20" x2="186" y2="145" stroke="#1E2942" stroke-width="1" stroke-dasharray="3 3" opacity="0.4" />
+                <text x="192" y="29" font-family="var(--font-mono)" font-size="8.5" fill="#64748B">FORECAST →</text>
+
+                <!-- Shaded forecast area -->
+                <path id="dss-area" d="" fill="rgba(217, 155, 78, 0.22)" />
+                <!-- Historical line (solid navy) -->
+                <polyline points="46,118 116,111 186,105" fill="none" stroke="#1E2942" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" />
+                <!-- Baseline dotted reference -->
+                <polyline points="186,105 256,102 326,100 396,98" fill="none" stroke="#94A3B8" stroke-width="1.6" stroke-dasharray="4 4" />
+                <!-- Dynamic Forecast Line (crimson) -->
+                <polyline id="dss-line" points="186,105 256,100 326,95 396,92" fill="none" stroke="#B8253A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+
+                <!-- Dynamic data points -->
+                <circle cx="186" cy="105" r="4" fill="#1E2942" />
+                <circle id="pt-1" cx="256" cy="100" r="4.2" fill="#D99B4E" stroke="#1E2942" stroke-width="1.4" />
+                <circle id="pt-2" cx="326" cy="95" r="4.2" fill="#D99B4E" stroke="#1E2942" stroke-width="1.4" />
+                <circle id="pt-3" cx="396" cy="92" r="4.8" fill="#B8253A" stroke="#FFF" stroke-width="1.6" />
+              </svg>
+            </div>
+
+            <div class="dss-controls">
+              <div>
+                <div style="font-family: var(--font-mono); font-size: 0.68rem; color: var(--slate-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px;">
+                  Demand Scenario Preset
+                </div>
+                <div class="scenario-pills" role="group" aria-label="Seasonal Demand Presets">
+                  <button type="button" class="scenario-btn active" data-mult="100" data-name="Standard">Standard</button>
+                  <button type="button" class="scenario-btn" data-mult="150" data-name="Promo Event">Promo Event</button>
+                  <button type="button" class="scenario-btn" data-mult="220" data-name="Holiday Peak">Holiday Peak</button>
+                </div>
+              </div>
+
+              <div class="slider-group">
+                <div class="slider-label-row">
+                  <label for="demand-slider">Seasonal Demand</label>
+                  <span id="slider-val-display" class="slider-val-badge">1.0×</span>
+                </div>
+                <input
+                  type="range"
+                  id="demand-slider"
+                  class="dss-slider"
+                  min="80"
+                  max="250"
+                  step="10"
+                  value="100"
+                  aria-valuetext="1.0 times baseline demand, optimal restock 18 units"
+                />
+              </div>
+
+              <div class="dss-kpi-card">
+                <div>
+                  <div class="dss-kpi-label">Optimal Restock Quantity</div>
+                  <div id="dss-kpi-sub" class="dss-kpi-sub">30-day demand + safety buffer</div>
+                </div>
+                <div id="dss-restock-qty" class="dss-kpi-num">18</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== STAGE 5: AI (AUTOMATED PO & ROBOT) ==================== -->
+        <div id="stage-5" class="stage-view">
+          <div class="stage-header-bar">
+            <p class="stage-instruction">
+              <strong>Action:</strong> Execute the AI-generated Purchase Order to dispatch the warehouse robotic arm and replenish live inventory.
+            </p>
+            <button type="button" id="btn-execute-ai" class="btn btn-crimson">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M8 2V5M8 11V14M2 8H5M11 8H14M4 4L6 6M10 10L12 12M12 4L10 6M6 10L4 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              </svg>
+              <span>Execute Automated PO</span>
+            </button>
+          </div>
+
+          <div class="ai-grid">
+            <div class="po-card">
+              <div class="po-header">
+                <span class="po-id">AUTO-PO #2026-9912</span>
+                <span id="po-badge" class="po-badge">READY TO DISPATCH</span>
+              </div>
+              <div class="po-details">
+                <div class="po-row"><span>Source Model</span><strong id="po-scenario">DSS · Standard (1.0×)</strong></div>
+                <div class="po-row"><span>SKU</span><strong>SKU-4092 · AeroPulse Watch</strong></div>
+                <div class="po-row"><span>Order Quantity</span><strong id="po-qty" style="color: var(--crimson); font-size: 0.96rem;">18 units</strong></div>
+                <div class="po-row"><span>Warehouse Hub</span><strong>Fulfillment Bay 04 (Autonomous)</strong></div>
+                <div class="po-row"><span>AI Confidence</span><strong>98.4% · Zero-Touch Approved</strong></div>
+              </div>
+            </div>
+
+            <div id="robot-stage" class="robot-stage">
+              <svg id="robot-svg" viewBox="0 0 360 190" role="img" aria-label="Warehouse robotic arm packing restock crate onto conveyor belt">
+                <!-- Background warehouse blueprint accents -->
+                <rect x="14" y="14" width="332" height="162" rx="6" fill="#FCFBF7" stroke="rgba(30,41,66,0.16)" stroke-dasharray="4 4" />
+                <text x="26" y="32" font-family="var(--font-mono)" font-size="9" fill="#64748B" font-weight="700">BAY 04 // AUTONOMOUS FULFILLMENT</text>
+                <text id="robot-status-svg" x="334" y="32" text-anchor="end" font-family="var(--font-mono)" font-size="9" fill="#B8253A" font-weight="700">STANDBY</text>
+
+                <!-- Conveyor Belt -->
+                <rect x="165" y="146" width="170" height="16" rx="8" fill="#1E2942" />
+                <line x1="176" y1="154" x2="324" y2="154" stroke="#D99B4E" stroke-width="3" class="conveyor-treads" />
+                <circle cx="177" cy="154" r="4" fill="#9FB0CC" />
+                <circle cx="323" cy="154" r="4" fill="#9FB0CC" />
+
+                <!-- Restock Crate -->
+                <g id="restock-crate">
+                  <rect x="115" y="106" width="54" height="40" rx="4" fill="#D99B4E" stroke="#1E2942" stroke-width="2" />
+                  <line x1="115" y1="120" x2="169" y2="120" stroke="#1E2942" stroke-width="1.4" />
+                  <rect x="124" y="125" width="36" height="15" rx="2" fill="#FCFBF7" />
+                  <text id="crate-qty-label" x="142" y="136" text-anchor="middle" font-family="var(--font-mono)" font-size="9.5" font-weight="700" fill="#1E2942">+18</text>
+                </g>
+
+                <!-- Articulated Robotic Arm -->
+                <g id="robot-base">
+                  <path d="M 60 162 L 72 142 H 118 L 130 162 Z" fill="#1E2942" />
+                  <rect x="52" y="162" width="86" height="8" rx="3" fill="#131B2E" />
+                </g>
+                <g id="arm-upper">
+                  <line x1="95" y1="148" x2="145" y2="86" stroke="#1E2942" stroke-width="11" stroke-linecap="round" />
+                  <line x1="95" y1="148" x2="145" y2="86" stroke="#334155" stroke-width="4" stroke-linecap="round" />
+                  <circle cx="95" cy="148" r="8" fill="#D99B4E" stroke="#1E2942" stroke-width="2" />
+                  <g id="arm-fore">
+                    <line x1="145" y1="86" x2="205" y2="96" stroke="#D99B4E" stroke-width="9" stroke-linecap="round" />
+                    <circle cx="145" cy="86" r="7" fill="#B8253A" stroke="#1E2942" stroke-width="2" />
+                    <!-- Gripper -->
+                    <circle cx="205" cy="96" r="5" fill="#1E2942" />
+                    <path d="M 202 101 L 195 113 M 208 101 L 215 113" stroke="#1E2942" stroke-width="3" stroke-linecap="round" />
+                  </g>
+                </g>
+              </svg>
+            </div>
+          </div>
+
+          <div id="complete-banner" class="complete-banner" role="status">
+            <div>
+              <strong>End-to-End Synthesis Complete!</strong>
+              <span id="complete-summary"> One customer tap automatically updated inventory, alerted management, modeled demand, and dispatched +18 units.</span>
+            </div>
+            <button type="button" id="btn-banner-autoplay" class="btn btn-ochre" style="padding: 6px 12px; font-size: 0.8rem;">
+              Replay in Enterprise Speed →
+            </button>
+          </div>
+        </div>
+
+      </section>
+    </main>
+  </div>
+
+  <script>
+    (() => {
+      /* ========================================================================
+         STATE & STAGE METADATA
+         ======================================================================== */
+      const INITIAL_STOCK = 5;
+      const THRESHOLD = 4;
+      const BASE_RESTOCK = 18;
+
+      const STAGES = {
+        1: {
+          layer: "Hardware",
+          badgeClass: "layer-hardware",
+          stageNum: "Stage 1 of 5 · Physical Input",
+          title: "NFC Smart Card Capture",
+          desc: "A customer taps a contactless NFC Smart Card against the point-of-sale terminal. Physical radio-frequency hardware converts the tap into an encrypted payment token.",
+          inData: "Customer checkout · 1× SKU-4092 ($249.00)",
+          outData: "Encrypted NFC Token #8F3A → Information System (TPS)"
+        },
+        2: {
+          layer: "Information System: TPS",
+          badgeClass: "layer-tps",
+          stageNum: "Stage 2 of 5 · Operational Execution",
+          title: "Transaction Processing System",
+          desc: "The Transaction Processing System (TPS) atomically records the sale, issues a digital receipt, and decrements live inventory—flagging SKU-4092 when it hits the reorder threshold.",
+          inData: "Auth Token #8F3A · Sale of 1× SKU-4092",
+          outData: "LOW_INVENTORY Event (Stock: 4/4) → Application Software"
+        },
+        3: {
+          layer: "Application Software",
+          badgeClass: "layer-app",
+          stageNum: "Stage 3 of 5 · Connective Alert",
+          title: "Enterprise Messaging (Microsoft Teams)",
+          desc: "An automated webhook routes the TPS threshold exception straight into Microsoft Teams so the Regional Manager can acknowledge and escalate the stockout risk.",
+          inData: "Webhook Alert: SKU-4092 at 4 units (Store #14)",
+          outData: "Manager Escalation → Information System (DSS)"
+        },
+        4: {
+          layer: "Information System: DSS",
+          badgeClass: "layer-dss",
+          stageNum: "Stage 4 of 5 · Strategic Forecasting",
+          title: "Decision Support System",
+          desc: "The Regional Manager uses the Decision Support System (DSS) to model next month's seasonal demand and compute the Optimal Restock Quantity before committing capital.",
+          inData: "Escalated SKU-4092 · Historical velocity + seasonal curves",
+          outData: "Approved Forecast Payload → Intelligent System (AI)"
+        },
+        5: {
+          layer: "Intelligent System: AI",
+          badgeClass: "layer-ai",
+          stageNum: "Stage 5 of 5 · Intelligent Automation",
+          title: "Autonomous Fulfillment & Restock",
+          desc: "Guided by the approved DSS forecast, the AI procurement engine generates and dispatches a zero-touch Purchase Order, commanding warehouse robotics to pack the exact optimal quantity.",
+          inData: "DSS Forecast Target · Optimal Restock Quantity",
+          outData: "Automated PO Dispatched → Live Inventory Replenished"
+        }
+      };
+
+      const state = {
+        currentStage: 1,
+        maxReachedStage: 1,
+        completedStages: new Set(),
+        stock: INITIAL_STOCK,
+        demandMult: 100, // percent: 80..250 -> 0.8x..2.5x
+        scenarioName: "Standard",
+        restockQty: BASE_RESTOCK,
+        autoplayUnlocked: false,
+        isAutoplaying: false,
+        stageLocked: false
+      };
+
+      /* ========================================================================
+         DOM REFERENCES
+         ======================================================================== */
+      const srAnnouncer = document.getElementById("sr-announcer");
+      const telStock = document.getElementById("tel-stock");
+      const telStockBadge = document.getElementById("tel-stock-badge");
+      const telStatus = document.getElementById("tel-status");
+      const telLayer = document.getElementById("tel-layer");
+      const pipelineStepLabel = document.getElementById("pipeline-step-label");
+
+      const briefBadge = document.getElementById("brief-badge");
+      const briefStageNum = document.getElementById("brief-stage-num");
+      const briefTitle = document.getElementById("brief-title");
+      const briefDesc = document.getElementById("brief-desc");
+      const briefIn = document.getElementById("brief-in");
+      const briefOut = document.getElementById("brief-out");
+      const briefProgressText = document.getElementById("brief-progress-text");
+
+      const btnAutoplay = document.getElementById("btn-autoplay");
+      const autoplayLabel = document.getElementById("autoplay-label");
+      const autoplayToast = document.getElementById("autoplay-toast");
+      const autoplayTimer = document.getElementById("autoplay-timer");
+      const btnReset = document.getElementById("btn-reset");
+
+      // Stage 1
+      const posTerminal = document.getElementById("pos-terminal");
+      const posStatus = document.getElementById("pos-status");
+      const nfcCard = document.getElementById("nfc-card");
+      const btnTapPay = document.getElementById("btn-tap-pay");
+
+      // Stage 2
+      const btnCommitTps = document.getElementById("btn-commit-tps");
+      const targetInvRow = document.getElementById("target-inv-row");
+      const tpsStockCell = document.getElementById("tps-stock-cell");
+      const tpsStatusChip = document.getElementById("tps-status-chip");
+      const receiptStamp = document.getElementById("receipt-stamp");
+
+      // Stage 3
+      const btnAckTeams = document.getElementById("btn-ack-teams");
+      const teamsAckNote = document.getElementById("teams-ack-note");
+
+      // Stage 4
+      const demandSlider = document.getElementById("demand-slider");
+      const sliderValDisplay = document.getElementById("slider-val-display");
+      const chartScenarioTag = document.getElementById("chart-scenario-tag");
+      const dssRestockQty = document.getElementById("dss-restock-qty");
+      const dssKpiSub = document.getElementById("dss-kpi-sub");
+      const dssLine = document.getElementById("dss-line");
+      const dssArea = document.getElementById("dss-area");
+      const pt1 = document.getElementById("pt-1");
+      const pt2 = document.getElementById("pt-2");
+      const pt3 = document.getElementById("pt-3");
+      const scenarioBtns = Array.from(document.querySelectorAll(".scenario-btn"));
+      const btnApproveDss = document.getElementById("btn-approve-dss");
+
+      // Stage 5
+      const poScenario = document.getElementById("po-scenario");
+      const poQty = document.getElementById("po-qty");
+      const poBadge = document.getElementById("po-badge");
+      const crateQtyLabel = document.getElementById("crate-qty-label");
+      const robotStage = document.getElementById("robot-stage");
+      const robotStatusSvg = document.getElementById("robot-status-svg");
+      const btnExecuteAi = document.getElementById("btn-execute-ai");
+      const completeBanner = document.getElementById("complete-banner");
+      const completeSummary = document.getElementById("complete-summary");
+      const btnBannerAutoplay = document.getElementById("btn-banner-autoplay");
+
+      const pulsePacket = document.getElementById("pulse-packet");
+
+      /* ========================================================================
+         HELPERS
+         ======================================================================== */
+      let announceTimeout = null;
+      function announce(msg) {
+        srAnnouncer.textContent = msg;
+        clearTimeout(announceTimeout);
+        announceTimeout = setTimeout(() => {
+          srAnnouncer.textContent = "";
+        }, 1200);
+      }
+
+      function sleep(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+      }
+
+      function updateTelemetryStock(newStock, badgeText, badgeClass) {
+        state.stock = newStock;
+        telStock.textContent = `${newStock} units`;
+        telStock.classList.add("bump");
+        setTimeout(() => telStock.classList.remove("bump"), 300);
+
+        telStockBadge.textContent = badgeText;
+        telStockBadge.className = `telemetry-pill ${badgeClass}`;
+      }
+
+      function animateDataPulse(fromStage, durationMs = 560) {
+        return new Promise((resolve) => {
+          const pipeIndex = fromStage; // 1..4
+          const startX = 164 + (pipeIndex - 1) * 220;
+          const endX = startX + 112;
+          const y = 136;
+
+          const activePath = document.getElementById(`pipe-active-${pipeIndex}`);
+          const dashPath = document.getElementById(`pipe-dash-${pipeIndex}`);
+          if (activePath) activePath.classList.add("flow-on");
+          if (dashPath) dashPath.classList.add("flow-on");
+
+          pulsePacket.classList.add("firing");
+          const startTime = performance.now();
+
+          function step(now) {
+            const t = Math.min(1, (now - startTime) / durationMs);
+            // Ease-out cubic
+            const eased = 1 - Math.pow(1 - t, 3);
+            const curX = startX + (endX - startX) * eased;
+            pulsePacket.setAttribute("transform", `translate(${curX.toFixed(1)}, ${y})`);
+            if (t < 1) {
+              requestAnimationFrame(step);
+            } else {
+              pulsePacket.classList.remove("firing");
+              resolve();
+            }
+          }
+          requestAnimationFrame(step);
+        });
+      }
+
+      function renderStage(stageNum) {
+        state.currentStage = stageNum;
+        const meta = STAGES[stageNum];
+
+        // Update pipeline pedestals
+        for (let i = 1; i <= 5; i++) {
+          const ped = document.getElementById(`pedestal-${i}`);
+          ped.classList.toggle("is-active", i === stageNum);
+          ped.classList.toggle("is-complete", state.completedStages.has(i));
+        }
+
+        // Update progress dots
+        document.querySelectorAll(".prog-dot").forEach((dot) => {
+          const d = Number(dot.dataset.dot);
+          dot.classList.toggle("active", d === stageNum);
+          dot.classList.toggle("done", state.completedStages.has(d) && d !== stageNum);
+        });
+
+        // Update brief panel
+        briefBadge.textContent = meta.layer;
+        briefBadge.className = `layer-badge ${meta.badgeClass}`;
+        briefStageNum.textContent = meta.stageNum;
+        briefTitle.textContent = meta.title;
+        briefDesc.textContent = meta.desc;
+        briefIn.textContent = meta.inData;
+        briefOut.textContent =
+          stageNum === 4
+            ? `Approved Restock: ${state.restockQty} units → Intelligent System (AI)`
+            : meta.outData;
+        briefProgressText.textContent = `${stageNum} / 5`;
+
+        // Update telemetry layer & step counter
+        telLayer.textContent = meta.layer;
+        pipelineStepLabel.textContent = `STAGE 0${stageNum} OF 05`;
+
+        // Show matching stage workspace view
+        for (let i = 1; i <= 5; i++) {
+          document.getElementById(`stage-${i}`).classList.toggle("is-visible", i === stageNum);
+        }
+
+        // Sync Stage 5 PO details whenever entering Stage 5
+        if (stageNum === 5) {
+          const multStr = (state.demandMult / 100).toFixed(1);
+          poScenario.textContent = `DSS · ${state.scenarioName} (${multStr}×)`;
+          poQty.textContent = `${state.restockQty} units`;
+          crateQtyLabel.textContent = `+${state.restockQty}`;
+          briefIn.textContent = `DSS Approved Target: ${state.restockQty} units (${state.scenarioName})`;
+        }
+
+        announce(`Entered ${meta.stageNum}: ${meta.title}`);
+      }
+
+      /* Allow clicking pedestals up to maxReachedStage to inspect */
+      document.querySelectorAll(".pedestal-group").forEach((ped) => {
+        ped.addEventListener("click", () => {
+          if (state.isAutoplaying) return;
+          const target = Number(ped.dataset.stage);
+          if (target <= state.maxReachedStage) {
+            renderStage(target);
+          }
+        });
+      });
+
+      /* ========================================================================
+         STAGE 1: NFC TAP & POINTER-CAPTURE DRAG
+         ======================================================================== */
+      async function triggerStage1Tap() {
+        if (state.stageLocked || state.completedStages.has(1)) return;
+        state.stageLocked = true;
+        btnTapPay.disabled = true;
+
+        posTerminal.classList.add("tapped");
+        posStatus.textContent = "APPROVED · TOKEN #8F3A";
+        posStatus.classList.add("approved");
+        telStatus.textContent = "NFC Payment Captured";
+        announce("NFC Smart Card tapped. Payment token captured.");
+
+        state.completedStages.add(1);
+        state.maxReachedStage = Math.max(state.maxReachedStage, 2);
+
+        await sleep(state.isAutoplaying ? 320 : 650);
+        await animateDataPulse(1, state.isAutoplaying ? 360 : 580);
+
+        state.stageLocked = false;
+        renderStage(2);
+      }
+
+      btnTapPay.addEventListener("click", triggerStage1Tap);
+
+      nfcCard.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          triggerStage1Tap();
+        }
+      });
+
+      // Pointer-capture drag with click fallback (following drag guide)
+      let dragStartX = 0;
+      let dragStartY = 0;
+      let isDragging = false;
+      let movedBeyondClick = false;
+
+      nfcCard.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0 || state.stageLocked || state.completedStages.has(1)) return;
+        dragStartX = event.clientX;
+        dragStartY = event.clientY;
+        isDragging = true;
+        movedBeyondClick = false;
+        nfcCard.setPointerCapture(event.pointerId);
+      });
+
+      nfcCard.addEventListener("pointermove", (event) => {
+        if (!isDragging || !nfcCard.hasPointerCapture(event.pointerId)) return;
+        const dx = event.clientX - dragStartX;
+        const dy = event.clientY - dragStartY;
+        if (!movedBeyondClick && Math.hypot(dx, dy) > 4) {
+          movedBeyondClick = true;
+          nfcCard.classList.add("dragging");
+        }
+        if (movedBeyondClick) {
+          nfcCard.style.transform = `translate3d(${dx}px, ${dy}px, 0) rotate(-3deg)`;
+          const cardRect = nfcCard.getBoundingClientRect();
+          const posRect = posTerminal.getBoundingClientRect();
+          const overlapping = !(
+            cardRect.right < posRect.left + 15 ||
+            cardRect.left > posRect.right - 15 ||
+            cardRect.bottom < posRect.top + 15 ||
+            cardRect.top > posRect.bottom - 15
+          );
+          posTerminal.classList.toggle("drop-hover", overlapping);
+        }
+      });
+
+      function finishCardDrag() {
+        if (!isDragging) return;
+        isDragging = false;
+        const wasOverReader = posTerminal.classList.contains("drop-hover");
+        nfcCard.classList.remove("dragging");
+        posTerminal.classList.remove("drop-hover");
+        nfcCard.style.transform = "";
+
+        if (!movedBeyondClick || wasOverReader) {
+          triggerStage1Tap();
+        }
+      }
+
+      nfcCard.addEventListener("lostpointercapture", finishCardDrag);
+
+      /* ========================================================================
+         STAGE 2: TPS COMMIT
+         ======================================================================== */
+      async function triggerStage2Commit() {
+        if (state.stageLocked || state.completedStages.has(2)) return;
+        state.stageLocked = true;
+        btnCommitTps.disabled = true;
+
+        tpsStockCell.textContent = "4";
+        tpsStatusChip.textContent = "LOW INVENTORY";
+        tpsStatusChip.className = "status-chip chip-low";
+        targetInvRow.classList.add("is-low");
+        receiptStamp.textContent = "STATUS: COMMITTED TO LEDGER";
+        receiptStamp.classList.add("committed");
+
+        updateTelemetryStock(4, "LOW INVENTORY", "pill-low");
+        telStatus.textContent = "Sale Committed · Low Stock";
+        announce("Transaction committed. Inventory decremented from 5 to 4 units and flagged Low Inventory.");
+
+        state.completedStages.add(2);
+        state.maxReachedStage = Math.max(state.maxReachedStage, 3);
+
+        await sleep(state.isAutoplaying ? 340 : 750);
+        await animateDataPulse(2, state.isAutoplaying ? 360 : 580);
+
+        state.stageLocked = false;
+        renderStage(3);
+      }
+
+      btnCommitTps.addEventListener("click", triggerStage2Commit);
+
+      /* ========================================================================
+         STAGE 3: MICROSOFT TEAMS ALERT
+         ======================================================================== */
+      async function triggerStage3Ack() {
+        if (state.stageLocked || state.completedStages.has(3)) return;
+        state.stageLocked = true;
+        btnAckTeams.disabled = true;
+
+        teamsAckNote.classList.add("shown");
+        telStatus.textContent = "Alert Acknowledged · Escalating";
+        announce("Low inventory alert acknowledged in Microsoft Teams. Escalating to Decision Support System.");
+
+        state.completedStages.add(3);
+        state.maxReachedStage = Math.max(state.maxReachedStage, 4);
+
+        await sleep(state.isAutoplaying ? 320 : 650);
+        await animateDataPulse(3, state.isAutoplaying ? 360 : 580);
+
+        state.stageLocked = false;
+        renderStage(4);
+      }
+
+      btnAckTeams.addEventListener("click", triggerStage3Ack);
+
+      /* ========================================================================
+         STAGE 4: DSS FORECAST MODEL & RANGE SLIDER
+         ======================================================================== */
+      function syncForecastModel(multPercent, explicitScenarioName = null) {
+        state.demandMult = Number(multPercent);
+        const factor = state.demandMult / 100;
+
+        // Determine scenario label
+        if (explicitScenarioName) {
+          state.scenarioName = explicitScenarioName;
+        } else if (state.demandMult <= 115) {
+          state.scenarioName = "Standard";
+        } else if (state.demandMult <= 185) {
+          state.scenarioName = "Promo Event";
+        } else {
+          state.scenarioName = "Holiday Peak";
+        }
+
+        // Compute optimal restock quantity (deterministic formula)
+        const projected30Day = Math.round(14 * factor);
+        const safetyBuffer = Math.round(4 * Math.sqrt(factor));
+        state.restockQty = projected30Day + safetyBuffer;
+
+        // Sync slider CSS variables (following slider guide fallback for attr())
+        demandSlider.value = state.demandMult;
+        demandSlider.style.setProperty("--attr-min", demandSlider.min || 80);
+        demandSlider.style.setProperty("--attr-max", demandSlider.max || 250);
+        demandSlider.style.setProperty("--control-value", state.demandMult);
+        demandSlider.setAttribute(
+          "aria-valuetext",
+          `${factor.toFixed(1)} times baseline demand, optimal restock ${state.restockQty} units`
+        );
+
+        // Update UI readouts
+        sliderValDisplay.textContent = `${factor.toFixed(1)}×`;
+        chartScenarioTag.textContent = `${state.scenarioName.toUpperCase()} (${factor.toFixed(1)}×)`;
+        dssRestockQty.textContent = `${state.restockQty}`;
+        dssKpiSub.textContent = `${projected30Day} est. demand + ${safetyBuffer} safety buffer`;
+
+        if (state.currentStage === 4) {
+          briefOut.textContent = `Approved Restock: ${state.restockQty} units → Intelligent System (AI)`;
+        }
+
+        // Update active preset pill
+        scenarioBtns.forEach((btn) => {
+          btn.classList.toggle("active", Number(btn.dataset.mult) === state.demandMult);
+        });
+
+        // Update SVG forecast curve (y range: 145 = 0 units, 25 = 45 units)
+        const clampY = (val) => Math.max(22, Math.min(142, 145 - (val / 45) * 120));
+        const y1 = clampY(16 * factor);
+        const y2 = clampY(18.5 * factor);
+        const y3 = clampY(20 * factor);
+
+        dssLine.setAttribute("points", `186,105 256,${y1.toFixed(1)} 326,${y2.toFixed(1)} 396,${y3.toFixed(1)}`);
+        dssArea.setAttribute(
+          "d",
+          `M 186 105 L 256 ${y1.toFixed(1)} L 326 ${y2.toFixed(1)} L 396 ${y3.toFixed(1)} L 396 145 L 186 145 Z`
+        );
+        pt1.setAttribute("cy", y1.toFixed(1));
+        pt2.setAttribute("cy", y2.toFixed(1));
+        pt3.setAttribute("cy", y3.toFixed(1));
+      }
+
+      demandSlider.addEventListener("input", () => {
+        syncForecastModel(demandSlider.value);
+      });
+
+      scenarioBtns.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          syncForecastModel(Number(btn.dataset.mult), btn.dataset.name);
+        });
+      });
+
+      async function triggerStage4Approve() {
+        if (state.stageLocked || state.completedStages.has(4)) return;
+        state.stageLocked = true;
+        btnApproveDss.disabled = true;
+
+        telStatus.textContent = `Forecast Approved (${state.restockQty} units)`;
+        announce(`Forecast model approved for ${state.restockQty} units. Forwarding to AI automation.`);
+
+        state.completedStages.add(4);
+        state.maxReachedStage = 5;
+
+        await sleep(state.isAutoplaying ? 300 : 480);
+        await animateDataPulse(4, state.isAutoplaying ? 360 : 580);
+
+        state.stageLocked = false;
+        renderStage(5);
+      }
+
+      btnApproveDss.addEventListener("click", triggerStage4Approve);
+
+      /* ========================================================================
+         STAGE 5: AI AUTOMATED PO & ROBOTIC ARM
+         ======================================================================== */
+      function unlockAutoplayMode() {
+        if (state.autoplayUnlocked) return;
+        state.autoplayUnlocked = true;
+        btnAutoplay.disabled = false;
+        btnAutoplay.classList.add("unlocked");
+        btnAutoplay.title = "Watch the entire 5-stage enterprise pipeline execute in real time";
+        autoplayLabel.textContent = "Simulate Real-Time Automation";
+      }
+
+      async function triggerStage5Execute() {
+        if (state.stageLocked || state.completedStages.has(5)) return;
+        state.stageLocked = true;
+        btnExecuteAi.disabled = true;
+
+        poBadge.textContent = "EXECUTING...";
+        robotStatusSvg.textContent = "GRIPPING CRATE";
+        telStatus.textContent = "AI Dispatching Warehouse Robot";
+
+        robotStage.classList.add("picking");
+        await sleep(state.isAutoplaying ? 320 : 580);
+
+        robotStage.classList.remove("picking");
+        robotStage.classList.add("moving");
+        robotStatusSvg.textContent = "LOADING CONVEYOR";
+        await sleep(state.isAutoplaying ? 400 : 720);
+
+        robotStage.classList.remove("moving");
+        robotStage.classList.add("dispatched");
+        robotStatusSvg.textContent = "DISPATCHED ✓";
+        poBadge.textContent = "EXECUTED & DISPATCHED";
+        poBadge.classList.add("executed");
+
+        const newTotalStock = 4 + state.restockQty;
+        updateTelemetryStock(newTotalStock, "RESTOCKED", "pill-ok");
+        telStatus.textContent = `Restocked (+${state.restockQty} units)`;
+
+        state.completedStages.add(5);
+        document.getElementById("pedestal-5").classList.add("is-complete");
+        document.querySelector('.prog-dot[data-dot="5"]').classList.add("done");
+
+        completeSummary.textContent = ` One customer tap updated TPS inventory, alerted Teams, modeled ${state.scenarioName} demand, and dispatched +${state.restockQty} units (New Stock: ${newTotalStock}).`;
+        completeBanner.classList.add("shown");
+
+        unlockAutoplayMode();
+        announce(`Automated purchase order executed. Warehouse robotic arm dispatched ${state.restockQty} units. Live inventory updated to ${newTotalStock} units.`);
+        state.stageLocked = false;
+      }
+
+      btnExecuteAi.addEventListener("click", triggerStage5Execute);
+
+      /* ========================================================================
+         RESET & ENTERPRISE SPEED AUTO-PLAY MODE
+         ======================================================================== */
+      function resetSimulation({ preserveScenario = false } = {}) {
+        state.currentStage = 1;
+        state.maxReachedStage = 1;
+        state.completedStages.clear();
+        state.stageLocked = false;
+
+        // Reset pipeline pipes & pulse
+        for (let i = 1; i <= 4; i++) {
+          document.getElementById(`pipe-active-${i}`).classList.remove("flow-on");
+          document.getElementById(`pipe-dash-${i}`).classList.remove("flow-on");
+        }
+        pulsePacket.classList.remove("firing");
+
+        // Reset Stage 1
+        posTerminal.classList.remove("tapped", "drop-hover");
+        posStatus.textContent = "READY · TAP CARD";
+        posStatus.classList.remove("approved");
+        btnTapPay.disabled = false;
+
+        // Reset Stage 2
+        btnCommitTps.disabled = false;
+        tpsStockCell.textContent = "5";
+        tpsStatusChip.textContent = "OK";
+        tpsStatusChip.className = "status-chip chip-ok";
+        targetInvRow.classList.remove("is-low");
+        receiptStamp.textContent = "STATUS: PENDING TPS COMMIT";
+        receiptStamp.classList.remove("committed");
+
+        // Reset Stage 3
+        btnAckTeams.disabled = false;
+        teamsAckNote.classList.remove("shown");
+
+        // Reset Stage 4
+        btnApproveDss.disabled = false;
+        if (!preserveScenario) {
+          syncForecastModel(100, "Standard");
+        } else {
+          syncForecastModel(state.demandMult, state.scenarioName);
+        }
+
+        // Reset Stage 5
+        btnExecuteAi.disabled = false;
+        poBadge.textContent = "READY TO DISPATCH";
+        poBadge.classList.remove("executed");
+        robotStage.classList.remove("picking", "moving", "dispatched");
+        robotStatusSvg.textContent = "STANDBY";
+        completeBanner.classList.remove("shown");
+
+        // Reset Telemetry
+        updateTelemetryStock(INITIAL_STOCK, "IN STOCK", "pill-ok");
+        telStatus.textContent = "Awaiting NFC Tap";
+
+        renderStage(1);
+      }
+
+      btnReset.addEventListener("click", () => {
+        if (state.isAutoplaying) return;
+        resetSimulation({ preserveScenario: false });
+      });
+
+      async function runEnterpriseSpeedMode() {
+        if (state.isAutoplaying || !state.autoplayUnlocked) return;
+        state.isAutoplaying = true;
+        btnAutoplay.disabled = true;
+        btnReset.disabled = true;
+        autoplayToast.classList.add("active");
+
+        const startTs = performance.now();
+        const timerInterval = setInterval(() => {
+          const sec = ((performance.now() - startTs) / 1000).toFixed(1);
+          autoplayTimer.textContent = `${sec}s`;
+        }, 100);
+
+        resetSimulation({ preserveScenario: true });
+        await sleep(320);
+
+        await triggerStage1Tap();
+        await sleep(220);
+
+        await triggerStage2Commit();
+        await sleep(220);
+
+        await triggerStage3Ack();
+        await sleep(260);
+
+        // Briefly showcase DSS modeling (use Holiday Peak if currently at default)
+        if (state.demandMult === 100) {
+          syncForecastModel(150, "Promo Event");
+          await sleep(280);
+        }
+        await triggerStage4Approve();
+        await sleep(220);
+
+        await triggerStage5Execute();
+
+        clearInterval(timerInterval);
+        const totalSec = ((performance.now() - startTs) / 1000).toFixed(1);
+        autoplayTimer.textContent = `${totalSec}s`;
+
+        state.isAutoplaying = false;
+        btnAutoplay.disabled = false;
+        btnReset.disabled = false;
+        setTimeout(() => {
+          autoplayToast.classList.remove("active");
+        }, 2500);
+      }
+
+      btnAutoplay.addEventListener("click", runEnterpriseSpeedMode);
+      btnBannerAutoplay.addEventListener("click", runEnterpriseSpeedMode);
+
+      /* ========================================================================
+         INITIALIZE
+         ======================================================================== */
+      syncForecastModel(100, "Standard");
+      renderStage(1);
+    })();
+  </script>
+</body>
+</html>
